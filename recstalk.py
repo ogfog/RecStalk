@@ -124,7 +124,7 @@ def create_embed(data, username):
     
     embed = {
         "embeds": [{
-            "title": f"**RecStalk v0.2 - {username}**",
+            "title": f"**Stalking - {username}**",
             "color": color,
             "image": {
                 "url": config['embed_image']
@@ -167,7 +167,7 @@ def create_embed(data, username):
         privacy = "🔒 PRIVATE" if room["roomInstanceType"] == 2 else "🔓 PUBLIC"
         room_info.append(f"**Room Name:** {room['name']}")
         room_info.append(f"**Privacy:** {privacy}")
-        room_info.append(f"**Capacity:** {room['maxCapacity']} {'(FULL)' if room['isFull'] else ''}")
+        room_info.append(f"**Capacity:** {room['maxCapacity']}")
         
         if room.get("voiceServerId"):
             room_info.append(f"**Voice Server:** {room['voiceServerId']}")
@@ -257,16 +257,37 @@ def monitor_player():
                     current_room_full = data["roomInstance"]["isFull"]
                     room_name = data["roomInstance"]["name"]
                     
+                    # Send room status updates for full/open with username
                     if current_room_full != last_room_full_state:
-                        room_status_embed = create_room_status_embed(current_room_full, room_name)
+                        room_status_embed = {
+                            "embeds": [{
+                                "title": "Room Full" if current_room_full else "Room Open",
+                                "description": f"User: {username}",
+                                "color": 16711680 if current_room_full else 65280
+                            }]
+                        }
                         requests.post(WEBHOOK_URL, json=room_status_embed)
                         last_room_full_state = current_room_full
 
-                if current_online_state != last_online_state or current_room_state != last_room_state:
+                    # Send room change notifications with details
+                    if current_room_state != last_room_state:
+                        privacy = "🔒 PRIVATE" if data["roomInstance"]["roomInstanceType"] == 2 else "🔓 PUBLIC"
+                        room_change_embed = {
+                            "embeds": [{
+                                "title": "Room Change",
+                                "description": f"Moved to: {room_name}\nPrivacy: {privacy}\nCapacity: {data['roomInstance']['maxCapacity']}",
+                                "color": 7506394
+                            }]
+                        }
+                        requests.post(WEBHOOK_URL, json=room_change_embed)
+
+                # Only send main embed for online/offline changes
+                if current_online_state != last_online_state:
                     embed = create_embed(data, username)
                     requests.post(WEBHOOK_URL, json=embed)
-                    last_online_state = current_online_state
-                    last_room_state = current_room_state
+                
+                last_online_state = current_online_state
+                last_room_state = current_room_state
             
             glitch_display(checks_count)
             time.sleep(0.05)

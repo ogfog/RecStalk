@@ -1,0 +1,10 @@
+{
+    "check_interval": 60,
+    "demo_duration": 5,
+    "glitch_intensity": 0.1,
+    "blur_chance": 0.1,
+    "webhook_url": "WEBHOOKHERE",
+    "bearer_token": "BEARERHERE",
+    "player_id": 1,
+    "embed_image": "https://i.pinimg.com/736x/fa/33/07/fa33076459131d68edf120cfc890c2fc.jpg"
+}

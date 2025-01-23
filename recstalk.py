@@ -124,7 +124,7 @@ def create_embed(data, username):
     
     embed = {
         "embeds": [{
-            "title": f"**Monitor - {username}**",
+            "title": f"**RecStalk v0.2 - {username}**",
             "color": color,
             "image": {
                 "url": config['embed_image']

@@ -63,7 +63,7 @@ def glitch_display(checks_count, demo_mode=False):
     
     for line in ASCII_ART.splitlines():
         if line:
-            color = random.choice(colors)  # Faster color alternation
+            color = random.choice(colors)
             
             if random.random() < GLITCH_INTENSITY:
                 line = blur_effect(line)
@@ -87,7 +87,7 @@ def glitch_display(checks_count, demo_mode=False):
         print('\n')
         print(center_text(color + f"Status Checks: {checks_count}" + Colors.RESET))
         print('\n' * 3)
-        time.sleep(0.05)  # Fast flash effect
+        time.sleep(0.05)
 
 def get_player_data(player_id):
     url = f"https://match.rec.net/player?id={player_id}"
@@ -98,7 +98,18 @@ def get_player_data(player_id):
     except:
         return None
 
-def create_embed(data):
+def get_user_info():
+    print(Colors.PINK + "Provide me a username: " + Colors.RESET, end='')
+    username = input().strip()
+    url = f"https://apim.rec.net/accounts/account?username={username}"
+    try:
+        response = requests.get(url)
+        data = response.json()
+        return data.get("accountId"), username
+    except:
+        return None, None
+
+def create_embed(data, username):
     global last_room_data
     
     if not data:
@@ -113,7 +124,7 @@ def create_embed(data):
     
     embed = {
         "embeds": [{
-            "title": "**Recstalk Free @goyardfog + discord.gg/merch**",
+            "title": f"**Monitor - {username}**",
             "color": color,
             "image": {
                 "url": config['embed_image']
@@ -122,6 +133,12 @@ def create_embed(data):
             "timestamp": datetime.utcnow().isoformat()
         }]
     }
+
+    embed["embeds"][0]["fields"].append({
+        "name": "Username",
+        "value": username,
+        "inline": True
+    })
 
     status = "🟢 Online" if data["isOnline"] else "🔴 Offline"
     embed["embeds"][0]["fields"].append({
@@ -187,10 +204,24 @@ def startup_demo():
         glitch_display(0, demo_mode=True)
         time.sleep(random.uniform(0.05, 0.2))
 
-def monitor_player(player_id, interval=None):
-    interval = interval or config['check_interval']
+def create_room_status_embed(is_full, room_name):
+    return {
+        "embeds": [{
+            "title": "Room Full" if is_full else "Room Open",
+            "description": f"Room: {room_name}",
+            "color": 16711680 if is_full else 65280
+        }]
+    }
+
+def monitor_player():
+    interval = config['check_interval']
     set_title()
     startup_demo()
+
+    account_id, username = get_user_info()
+    if not account_id:
+        print("\nFailed to fetch account information!")
+        return
     
     if not check_auth():
         clear()
@@ -201,6 +232,7 @@ def monitor_player(player_id, interval=None):
     checks_count = 0
     last_online_state = None
     last_room_state = None
+    last_room_full_state = None
     last_check_time = 0
     
     while True:
@@ -211,7 +243,7 @@ def monitor_player(player_id, interval=None):
                 checks_count += 1
                 last_check_time = current_time
                 
-                data = get_player_data(player_id)
+                data = get_player_data(account_id)
                 if not data:
                     clear()
                     print(center_text(ASCII_ART))
@@ -220,18 +252,28 @@ def monitor_player(player_id, interval=None):
                     
                 current_online_state = data["isOnline"]
                 current_room_state = json.dumps(data.get("roomInstance", {}), sort_keys=True)
+                
+                if data["isOnline"] and data["roomInstance"]:
+                    current_room_full = data["roomInstance"]["isFull"]
+                    room_name = data["roomInstance"]["name"]
+                    
+                    if current_room_full != last_room_full_state:
+                        room_status_embed = create_room_status_embed(current_room_full, room_name)
+                        requests.post(WEBHOOK_URL, json=room_status_embed)
+                        last_room_full_state = current_room_full
 
                 if current_online_state != last_online_state or current_room_state != last_room_state:
-                    embed = create_embed(data)
+                    embed = create_embed(data, username)
                     requests.post(WEBHOOK_URL, json=embed)
                     last_online_state = current_online_state
                     last_room_state = current_room_state
             
             glitch_display(checks_count)
-            time.sleep(0.05)  # Controls animation speed
+            time.sleep(0.05)
+            
         except Exception as e:
             print(f"Error: {e}")
             time.sleep(interval)
 
 if __name__ == "__main__":
-    monitor_player(config['player_id'])
+    monitor_player()

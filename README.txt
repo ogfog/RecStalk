@@ -1,4 +1,3 @@
-Discord.gg/Merch
 Free RR Stalking Bot, Very simple.
 
 Update 1.0

@@ -8,6 +8,9 @@ import ctypes
 import sys
 import shutil
 
+
+#thank fog for this
+
 # Load config
 with open('config.json', 'r') as f:
     config = json.load(f)
@@ -101,13 +104,14 @@ def get_player_data(player_id):
 def get_user_info():
     print(Colors.PINK + "Provide me a username: " + Colors.RESET, end='')
     username = input().strip()
+    print(Colors.PINK + "Monitor room capacity? (y/n): " + Colors.RESET, end='').strip().lower() == 'y'
     url = f"https://apim.rec.net/accounts/account?username={username}"
     try:
         response = requests.get(url)
         data = response.json()
-        return data.get("accountId"), username
+        return data.get("accountId"), username, monitor_capacity
     except:
-        return None, None
+        return None, None, False
 
 def create_embed(data, username):
     global last_room_data
@@ -124,7 +128,7 @@ def create_embed(data, username):
     
     embed = {
         "embeds": [{
-            "title": f"**Stalking - {username}**",
+            "title": f"**👓 Stalking - {username}**",
             "color": color,
             "image": {
                 "url": config['embed_image']
@@ -213,15 +217,104 @@ def create_room_status_embed(is_full, room_name):
         }]
     }
 
+def get_user_info():
+    print(Colors.PINK + "Provide me a username: " + Colors.RESET, end='')
+    username = input().strip()
+    print(Colors.PINK + "Monitor room capacity? (y/n): " + Colors.RESET, end='')
+    monitor_capacity = input().strip().lower() == 'y'
+    url = f"https://apim.rec.net/accounts/account?username={username}"
+    try:
+        response = requests.get(url)
+        data = response.json()
+        return data.get("accountId"), username, monitor_capacity
+    except:
+        return None, None, False
+
+def get_room_signature(room):
+    return f"{room.get('name', '')}-{room.get('voiceServerId', '')}-{room.get('voiceAuthId', '')}"
+
 def monitor_player():
     interval = config['check_interval']
     set_title()
     startup_demo()
 
-    account_id, username = get_user_info()
+    account_id, username, monitor_capacity = get_user_info()
     if not account_id:
         print("\nFailed to fetch account information!")
         return
+    
+    if not check_auth():
+        clear()
+        print(center_text(ASCII_ART))
+        print(center_text("\nAuthorization Expired - Grab a New One!"))
+        return
+        
+    checks_count = 0
+    last_online_state = None
+    last_room_signature = None
+    last_room_full_state = None
+    last_check_time = 0
+    
+    while True:
+        try:
+            current_time = time.time()
+            
+            if current_time - last_check_time >= interval:
+                checks_count += 1
+                last_check_time = current_time
+                
+                data = get_player_data(account_id)
+                if not data:
+                    clear()
+                    print(center_text(ASCII_ART))
+                    print(center_text("\nAuthorization Expired - Grab a New One!"))
+                    break
+                    
+                current_online_state = data["isOnline"]
+
+                if data["isOnline"] and data["roomInstance"]:
+                    current_room = data["roomInstance"]
+                    current_room_signature = get_room_signature(current_room)
+                    
+                    # Room change detection based on name or voice details
+                    if current_room_signature != last_room_signature:
+                        privacy = "🔒 PRIVATE" if current_room["roomInstanceType"] == 2 else "🔓 PUBLIC"
+                        room_change_embed = {
+                            "embeds": [{
+                                "title": f"Room Change - {username}",
+                                "description": f"Moved to: {current_room['name']}\nPrivacy: {privacy}\nCapacity: {current_room['maxCapacity']}\nVoice Server: {current_room.get('voiceServerId', 'None')}\nVoice Auth: {current_room.get('voiceAuthId', 'None')}",
+                                "color": 7506394
+                            }]
+                        }
+                        requests.post(WEBHOOK_URL, json=room_change_embed)
+                        last_room_signature = current_room_signature
+
+                    # Separate monitor for room capacity
+                    if monitor_capacity:
+                        current_room_full = current_room["isFull"]
+                        if current_room_full != last_room_full_state:
+                            room_status_embed = {
+                                "embeds": [{
+                                    "title": "Room Full" if current_room_full else "Room Open",
+                                    "description": f"User: {username}",
+                                    "color": 16711680 if current_room_full else 65280
+                                }]
+                            }
+                            requests.post(WEBHOOK_URL, json=room_status_embed)
+                            last_room_full_state = current_room_full
+
+                # Online status changes
+                if current_online_state != last_online_state:
+                    embed = create_embed(data, username)
+                    requests.post(WEBHOOK_URL, json=embed)
+                    last_online_state = current_online_state
+            
+            glitch_display(checks_count)
+            time.sleep(0.05)
+            
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(interval)
     
     if not check_auth():
         clear()
@@ -254,32 +347,43 @@ def monitor_player():
                 current_room_state = json.dumps(data.get("roomInstance", {}), sort_keys=True)
                 
                 if data["isOnline"] and data["roomInstance"]:
-                    current_room_full = data["roomInstance"]["isFull"]
-                    room_name = data["roomInstance"]["name"]
+                    current_room = data["roomInstance"]
+                    current_room_name = current_room["name"]
+                    current_voice_server = current_room.get("voiceServerId", "")
+                    current_voice_auth = current_room.get("voiceAuthId", "")
                     
-                    # Send room status updates for full/open with username
-                    if current_room_full != last_room_full_state:
-                        room_status_embed = {
-                            "embeds": [{
-                                "title": "Room Full" if current_room_full else "Room Open",
-                                "description": f"User: {username}",
-                                "color": 16711680 if current_room_full else 65280
-                            }]
-                        }
-                        requests.post(WEBHOOK_URL, json=room_status_embed)
-                        last_room_full_state = current_room_full
-
-                    # Send room change notifications with details
-                    if current_room_state != last_room_state:
-                        privacy = "🔒 PRIVATE" if data["roomInstance"]["roomInstanceType"] == 2 else "🔓 PUBLIC"
+                    # Check if room or voice details changed
+                    last_room = json.loads(last_room_state) if last_room_state else {}
+                    last_voice_server = last_room.get("voiceServerId", "")
+                    last_voice_auth = last_room.get("voiceAuthId", "")
+                    
+                    if (current_room_name != last_room.get("name", "") or 
+                        current_voice_server != last_voice_server or 
+                        current_voice_auth != last_voice_auth):
+                        
+                        privacy = "🔒 PRIVATE" if current_room["roomInstanceType"] == 2 else "🔓 PUBLIC"
                         room_change_embed = {
                             "embeds": [{
-                                "title": "Room Change",
-                                "description": f"Moved to: {room_name}\nPrivacy: {privacy}\nCapacity: {data['roomInstance']['maxCapacity']}",
+                                "title": f"Room Change - {username}",
+                                "description": f"Moved to: {current_room_name}\nPrivacy: {privacy}\nCapacity: {current_room['maxCapacity']}",
                                 "color": 7506394
                             }]
                         }
                         requests.post(WEBHOOK_URL, json=room_change_embed)
+
+                    # Separate monitor for room capacity if enabled
+                    if monitor_capacity:
+                        current_room_full = current_room["isFull"]
+                        if current_room_full != last_room_full_state:
+                            room_status_embed = {
+                                "embeds": [{
+                                    "title": "Room Full" if current_room_full else "Room Open",
+                                    "description": f"User: {username}",
+                                    "color": 16711680 if current_room_full else 65280
+                                }]
+                            }
+                            requests.post(WEBHOOK_URL, json=room_status_embed)
+                            last_room_full_state = current_room_full
 
                 # Only send main embed for online/offline changes
                 if current_online_state != last_online_state:

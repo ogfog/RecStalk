@@ -1,8 +1,6 @@
 Free RR Stalking Bot, Very simple.
 
-
-
-
+![image](https://github.com/user-attachments/assets/9823bbf9-c225-4751-b054-38a4a55222a9)
 
 Step 1: 
 

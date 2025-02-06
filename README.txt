@@ -1,10 +1,8 @@
 Free RR Stalking Bot, Very simple.
 
-Update 1.0
---------------------------------------------------------------------
-Getting Set Up
---------------------------------------------------------------------
-Go into the Config.Json and change these variables
+
+
+
 
 Step 1: 
 
@@ -19,7 +17,7 @@ visit https://rec.net/api/auth/session
 copy the accessToken Variable
 store this inside the bearer_token
 
---------------------------------------------------------------------
-save it and run it ! 
---------------------------------------------------------------------
+Step 3: 
+Run it and input a username, and if u want to monitor
+room capacity updates along with it!.
 

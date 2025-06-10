@@ -275,8 +275,7 @@ def monitor_player():
                 if data["isOnline"] and data["roomInstance"]:
                     current_room = data["roomInstance"]
                     current_room_signature = get_room_signature(current_room)
-                    
-                    # Room change detection based on name or voice details
+
                     if current_room_signature != last_room_signature:
                         privacy = "🔒 PRIVATE" if current_room["roomInstanceType"] == 2 else "🔓 PUBLIC"
                         room_change_embed = {
@@ -288,8 +287,7 @@ def monitor_player():
                         }
                         requests.post(WEBHOOK_URL, json=room_change_embed)
                         last_room_signature = current_room_signature
-
-                    # Separate monitor for room capacity
+                        
                     if monitor_capacity:
                         current_room_full = current_room["isFull"]
                         if current_room_full != last_room_full_state:
@@ -303,7 +301,6 @@ def monitor_player():
                             requests.post(WEBHOOK_URL, json=room_status_embed)
                             last_room_full_state = current_room_full
 
-                # Online status changes
                 if current_online_state != last_online_state:
                     embed = create_embed(data, username)
                     requests.post(WEBHOOK_URL, json=embed)
@@ -352,7 +349,6 @@ def monitor_player():
                     current_voice_server = current_room.get("voiceServerId", "")
                     current_voice_auth = current_room.get("voiceAuthId", "")
                     
-                    # Check if room or voice details changed
                     last_room = json.loads(last_room_state) if last_room_state else {}
                     last_voice_server = last_room.get("voiceServerId", "")
                     last_voice_auth = last_room.get("voiceAuthId", "")
@@ -371,7 +367,6 @@ def monitor_player():
                         }
                         requests.post(WEBHOOK_URL, json=room_change_embed)
 
-                    # Separate monitor for room capacity if enabled
                     if monitor_capacity:
                         current_room_full = current_room["isFull"]
                         if current_room_full != last_room_full_state:
@@ -385,7 +380,6 @@ def monitor_player():
                             requests.post(WEBHOOK_URL, json=room_status_embed)
                             last_room_full_state = current_room_full
 
-                # Only send main embed for online/offline changes
                 if current_online_state != last_online_state:
                     embed = create_embed(data, username)
                     requests.post(WEBHOOK_URL, json=embed)
